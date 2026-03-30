@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace "com.koyufox.fuckpinning"
+    namespace "dev.koyufox.fuckpinning"
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.koyufox.fuckpinning"
+        applicationId "dev.koyufox.fuckpinning"
         minSdk 24
         targetSdk 34
         versionCode 1
