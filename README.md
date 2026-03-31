@@ -1,10 +1,13 @@
-# fuckpinning (LSPosed/Xposed)
+# FuckPinning
 
-This module hooks `com.android.server.policy.PhoneWindowManager.powerLongPress` in the `android` process.
+This module currently contains two hooks:
+- `PowerLongPressUnpinHook`: hooks `com.android.server.policy.PhoneWindowManager.powerLongPress` in the `android` process (system_server).
+- `LauncherGestureBlockHook`: hooks `com.android.quickstep.TouchInteractionService.e0` in the `com.zui.launcher` process.
 
 Behavior in current version:
 - If the device is in lock task mode (screen pinning), long-press power exits lock task mode.
 - If not in lock task mode, original power long-press behavior is untouched.
+- In `com.zui.launcher`, when `ScreenPinnedInputConsumer` is selected, it is replaced by the default consumer to block gesture unpin without returning null.
 
 ## Build
 
@@ -16,16 +19,8 @@ Behavior in current version:
 
 1. Install the generated APK.
 2. Enable the module in LSPosed/Xposed.
-3. Scope the module to `android` (system_server process).
+3. Configure LSPosed scope correctly:
+	- For `PowerLongPressUnpinHook`: scope **must include** `system` (System Framework / system_server).
+	- For `LauncherGestureBlockHook`: scope **must include** `com.zui.launcher`.
 4. Reboot.
 
-## Verification
-
-1. Enter screen pinning.
-2. Long-press power.
-3. Expected result: exit screen pinning directly, no global actions takeover.
-
-## Notes
-
-- This stage intentionally does not modify `NavigationBar.onLongPressNavigationButtons` or `NavigationBar.onHomeLongClick`.
-- If lock task exit fails, the hook falls back to stock power behavior.
