@@ -19,8 +19,8 @@ Behavior in current version:
 
 1. Install the generated APK.
 2. Enable the module in LSPosed/Xposed.
-3. Configure LSPosed scope correctly:
-	- For `PowerLongPressUnpinHook`: scope **must include** `system` (System Framework / system_server).
-	- For `LauncherGestureBlockHook`: scope **must include** `com.zui.launcher`.
-4. Reboot.
+3. Reboot.
+
+# Note
+Now it only support zui and only tested on TB320FC v1.1.350
 
