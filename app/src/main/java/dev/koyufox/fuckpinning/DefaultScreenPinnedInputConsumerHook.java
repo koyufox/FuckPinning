@@ -1,41 +1,93 @@
 package dev.koyufox.fuckpinning;
 
-import android.content.Context;
-
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
+import org.luckypray.dexkit.DexKitBridge;
+import org.luckypray.dexkit.query.FindMethod;
+import org.luckypray.dexkit.query.matchers.MethodMatcher;
+import org.luckypray.dexkit.result.MethodData;
 
 public final class DefaultScreenPinnedInputConsumerHook {
     private static final String TAG = "[FuckPinning]";
     private static final String SCREEN_PINNED_CONSUMER_CLASS = "com.android.quickstep.inputconsumers.ScreenPinnedInputConsumer";
-    private static final String GESTURE_STATE_SIMPLE_NAME = "GestureState";
+    private static final String QUICKSTEP_PACKAGE = "com.android.quickstep";
+    private static final String CONTEXT_CLASS = "android.content.Context";
+
+    private static volatile boolean dexKitLoadAttempted;
+    private static volatile boolean dexKitLoaded;
 
     private DefaultScreenPinnedInputConsumerHook() {
     }
 
     public static void install(ClassLoader classLoader) {
-        boolean installed = installScreenPinnedConsumerHook(classLoader);
-        if (installed) {
-            XposedBridge.log(TAG + " primary ScreenPinnedInputConsumer signature hook active");
+        if (!ensureDexKitLoaded()) {
+            XposedBridge.log(TAG + " DexKit unavailable, skip install");
             return;
         }
 
-        XposedBridge.log(TAG + " primary hook not matched, no fallback enabled");
+        boolean installed = installScreenPinnedConsumerHookWithDexKit(classLoader);
+        if (installed) {
+            XposedBridge.log(TAG + " DexKit ScreenPinnedInputConsumer hook active");
+            return;
+        }
+
+        XposedBridge.log(TAG + " DexKit hook not matched");
     }
 
-    private static boolean installScreenPinnedConsumerHook(ClassLoader classLoader) {
-        try {
-            Class<?> consumerClass = XposedHelpers.findClass(SCREEN_PINNED_CONSUMER_CLASS, classLoader);
-            Method[] declaredMethods = consumerClass.getDeclaredMethods();
-            int hookedCount = 0;
+    private static synchronized boolean ensureDexKitLoaded() {
+        if (dexKitLoadAttempted) {
+            return dexKitLoaded;
+        }
 
-            for (Method method : declaredMethods) {
-                if (!isPrimaryTargetMethod(method)) {
+        dexKitLoadAttempted = true;
+        try {
+            System.loadLibrary("dexkit");
+            dexKitLoaded = true;
+            XposedBridge.log(TAG + " DexKit native library loaded");
+        } catch (Throwable t) {
+            dexKitLoaded = false;
+            XposedBridge.log(TAG + " failed to load DexKit native library: " + t);
+        }
+        return dexKitLoaded;
+    }
+
+    private static boolean installScreenPinnedConsumerHookWithDexKit(ClassLoader classLoader) {
+        try (DexKitBridge bridge = DexKitBridge.create(classLoader, false)) {
+            FindMethod query = new FindMethod()
+                    .searchPackages(QUICKSTEP_PACKAGE)
+                    .matcher(new MethodMatcher()
+                            .declaredClass(SCREEN_PINNED_CONSUMER_CLASS)
+                            .returnType("void")
+                    .paramTypes(CONTEXT_CLASS, null)
+                    .addInvoke(new MethodMatcher()
+                        .name("stopScreenPinning")
+                        .returnType("void")
+                        .paramCount(0)
+                    )
+                    );
+
+            Set<String> hookedMethodSigns = new HashSet<>();
+            int candidateCount = 0;
+
+            for (MethodData methodData : bridge.findMethod(query)) {
+                if (!methodData.isMethod()) {
+                    continue;
+                }
+
+                Method method = resolveMethod(methodData, classLoader);
+                if (method == null) {
+                    continue;
+                }
+
+                candidateCount++;
+
+                String sign = method.toGenericString();
+                if (!hookedMethodSigns.add(sign)) {
                     continue;
                 }
 
@@ -45,55 +97,31 @@ public final class DefaultScreenPinnedInputConsumerHook {
                         handleBeforePrimaryMethod(param, method);
                     }
                 });
-                hookedCount++;
                 XposedBridge.log(TAG + " hooked primary method candidate: " + formatMethod(method));
             }
 
-            if (hookedCount > 0) {
-                XposedBridge.log(TAG + " primary hook candidates matched: " + hookedCount);
+            XposedBridge.log(TAG + " DexKit candidates scanned: " + candidateCount);
+
+            if (!hookedMethodSigns.isEmpty()) {
+                XposedBridge.log(TAG + " DexKit hook candidates matched: " + hookedMethodSigns.size());
                 return true;
             }
 
-            XposedBridge.log(TAG + " no primary method candidate matched in " + SCREEN_PINNED_CONSUMER_CLASS);
+            XposedBridge.log(TAG + " DexKit no method candidate matched in " + SCREEN_PINNED_CONSUMER_CLASS);
             return false;
         } catch (Throwable t) {
-            XposedBridge.log(TAG + " failed to install primary signature hook: " + t);
+            XposedBridge.log(TAG + " DexKit hook install failed: " + t);
             return false;
         }
     }
 
-    private static boolean isPrimaryTargetMethod(Method method) {
-        if (method == null || Modifier.isStatic(method.getModifiers())) {
-            return false;
+    private static Method resolveMethod(MethodData methodData, ClassLoader classLoader) {
+        try {
+            return methodData.getMethodInstance(classLoader);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + " failed to resolve DexKit method instance: " + t);
+            return null;
         }
-
-        if (method.getReturnType() != void.class) {
-            return false;
-        }
-
-        Class<?>[] parameterTypes = method.getParameterTypes();
-        if (parameterTypes.length != 2) {
-            return false;
-        }
-
-        if (!Context.class.isAssignableFrom(parameterTypes[0])) {
-            return false;
-        }
-
-        return looksLikeGestureState(parameterTypes[1]);
-    }
-
-    private static boolean looksLikeGestureState(Class<?> maybeGestureStateClass) {
-        if (maybeGestureStateClass == null) {
-            return false;
-        }
-
-        if (GESTURE_STATE_SIMPLE_NAME.equals(maybeGestureStateClass.getSimpleName())) {
-            return true;
-        }
-
-        String lowerName = maybeGestureStateClass.getName().toLowerCase(Locale.ROOT);
-        return lowerName.contains("gesture") && lowerName.contains("state");
     }
 
     private static void handleBeforePrimaryMethod(XC_MethodHook.MethodHookParam param, Method method) {
