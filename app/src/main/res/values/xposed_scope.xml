@@ -4,5 +4,6 @@
         <item>android</item>
         <item>com.zui.launcher</item>
         <item>com.android.launcher3</item>
+        <item>com.miui.home</item>
     </string-array>
 </resources>

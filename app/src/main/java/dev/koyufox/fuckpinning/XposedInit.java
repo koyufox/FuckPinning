@@ -43,6 +43,12 @@ public final class XposedInit implements IXposedHookLoadPackage {
         if ("com.android.launcher3".equals(lpparam.packageName)) {
             XposedBridge.log(TAG + " loaded in com.android.launcher3 process");
             DefaultScreenPinnedInputConsumerHook.install(lpparam.classLoader);
+            return;
+        }
+
+        if ("com.miui.home".equals(lpparam.packageName)) {
+            XposedBridge.log(TAG + " loaded in com.miui.home process");
+            HyperosLauncherGestureBlockHook.install(lpparam.classLoader);
         }
     }
 }
