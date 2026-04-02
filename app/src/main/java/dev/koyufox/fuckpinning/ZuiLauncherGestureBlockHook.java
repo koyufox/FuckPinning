@@ -6,12 +6,12 @@ import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
-public final class LauncherGestureBlockHook {
+public final class ZuiLauncherGestureBlockHook {
     private static final String TAG = "[FuckPinning]";
     private static final String TIS_CLASS = "com.android.quickstep.TouchInteractionService";
     private static final String DEFAULT_CONSUMER_FIELD = "q";
 
-    private LauncherGestureBlockHook() {
+    private ZuiLauncherGestureBlockHook() {
     }
 
     public static void install(ClassLoader classLoader) {
