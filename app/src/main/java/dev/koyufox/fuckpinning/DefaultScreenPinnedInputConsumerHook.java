@@ -10,17 +10,17 @@ import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
-public final class ZuiLauncherGestureBlockHook {
+public final class DefaultScreenPinnedInputConsumerHook {
     private static final String TAG = "[FuckPinning]";
     private static final String SCREEN_PINNED_CONSUMER_CLASS = "com.android.quickstep.inputconsumers.ScreenPinnedInputConsumer";
     private static final String GESTURE_STATE_SIMPLE_NAME = "GestureState";
 
-    private ZuiLauncherGestureBlockHook() {
+    private DefaultScreenPinnedInputConsumerHook() {
     }
 
     public static void install(ClassLoader classLoader) {
-        boolean primaryHookInstalled = installScreenPinnedConsumerHook(classLoader);
-        if (primaryHookInstalled) {
+        boolean installed = installScreenPinnedConsumerHook(classLoader);
+        if (installed) {
             XposedBridge.log(TAG + " primary ScreenPinnedInputConsumer signature hook active");
             return;
         }

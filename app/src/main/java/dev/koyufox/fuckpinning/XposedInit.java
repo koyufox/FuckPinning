@@ -17,13 +17,13 @@ public final class XposedInit implements IXposedHookLoadPackage {
 
         if ("com.zui.launcher".equals(lpparam.packageName)) {
             XposedBridge.log(TAG + " loaded in com.zui.launcher process");
-            ZuiLauncherGestureBlockHook.install(lpparam.classLoader);
+            DefaultScreenPinnedInputConsumerHook.install(lpparam.classLoader);
             return;
         }
 
         if ("com.android.launcher3".equals(lpparam.packageName)) {
             XposedBridge.log(TAG + " loaded in com.android.launcher3 process");
-            TrebuchetLauncherGestureBlockHook.install(lpparam.classLoader);
+            DefaultScreenPinnedInputConsumerHook.install(lpparam.classLoader);
         }
     }
 }
