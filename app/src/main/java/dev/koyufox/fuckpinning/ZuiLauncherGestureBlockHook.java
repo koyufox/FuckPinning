@@ -13,8 +13,6 @@ import de.robv.android.xposed.XposedHelpers;
 public final class ZuiLauncherGestureBlockHook {
     private static final String TAG = "[FuckPinning]";
     private static final String SCREEN_PINNED_CONSUMER_CLASS = "com.android.quickstep.inputconsumers.ScreenPinnedInputConsumer";
-    private static final String TIS_CLASS = "com.android.quickstep.TouchInteractionService";
-    private static final String DEFAULT_CONSUMER_FIELD = "q";
     private static final String GESTURE_STATE_SIMPLE_NAME = "GestureState";
 
     private ZuiLauncherGestureBlockHook() {
@@ -27,8 +25,7 @@ public final class ZuiLauncherGestureBlockHook {
             return;
         }
 
-        XposedBridge.log(TAG + " primary hook not matched, fallback activated: TouchInteractionService.e0");
-        installE0FallbackHook(classLoader);
+        XposedBridge.log(TAG + " primary hook not matched, no fallback enabled");
     }
 
     private static boolean installScreenPinnedConsumerHook(ClassLoader classLoader) {
@@ -132,56 +129,6 @@ public final class ZuiLauncherGestureBlockHook {
         }
         builder.append(')');
         return builder.toString();
-    }
-
-    private static void installE0FallbackHook(ClassLoader classLoader) {
-        try {
-            Class<?> tisClass = XposedHelpers.findClass(TIS_CLASS, classLoader);
-            XposedBridge.hookAllMethods(tisClass, "e0", new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    handleAfterE0Fallback(param);
-                }
-            });
-            XposedBridge.log(TAG + " fallback hook installed: TouchInteractionService.e0");
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + " failed to install e0 fallback hook: " + t);
-        }
-    }
-
-    private static void handleAfterE0Fallback(XC_MethodHook.MethodHookParam param) {
-        try {
-            Object consumer = param.getResult();
-            if (!isScreenPinnedConsumer(consumer)) {
-                return;
-            }
-
-            Object fallbackConsumer = getDefaultConsumer(param.thisObject);
-            if (fallbackConsumer != null) {
-                param.setResult(fallbackConsumer);
-                XposedBridge.log(TAG + " fallback replaced ScreenPinnedInputConsumer with default consumer");
-                return;
-            }
-
-            // Safety fallback: keep original result if we cannot resolve a replacement.
-            XposedBridge.log(TAG + " fallback default consumer unavailable, keep original ScreenPinnedInputConsumer");
-        } catch (Throwable t) {
-            // Never break launcher gesture dispatch on hook errors.
-            XposedBridge.log(TAG + " e0 fallback post-hook failed, fallback to stock behavior: " + t);
-        }
-    }
-
-    private static Object getDefaultConsumer(Object touchInteractionService) {
-        if (touchInteractionService == null) {
-            return null;
-        }
-
-        try {
-            return XposedHelpers.getObjectField(touchInteractionService, DEFAULT_CONSUMER_FIELD);
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + " failed to resolve default consumer field '" + DEFAULT_CONSUMER_FIELD + "': " + t);
-            return null;
-        }
     }
 
     private static boolean isScreenPinnedConsumer(Object consumer) {
