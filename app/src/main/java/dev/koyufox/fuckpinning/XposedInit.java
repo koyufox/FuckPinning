@@ -37,7 +37,7 @@ public final class XposedInit implements IXposedHookLoadPackage {
                 XposedBridge.log(TAG + " detected HyperOS code " + TARGET_HYPEROS_CODE + ", using two-keys combo hook");
                 HyperosTwoKeysCombinationRuleHook.install(lpparam.classLoader);
             } else {
-                PowerLongPressUnpinHook.install(lpparam.classLoader);
+                PowerKeyRuleLongPressUnpinHook.install(lpparam.classLoader);
             }
             return;
         }

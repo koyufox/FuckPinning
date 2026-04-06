@@ -25,29 +25,48 @@ import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 
-public final class PowerLongPressUnpinHook {
+public final class PowerKeyRuleLongPressUnpinHook {
     private static final String TAG = "[FuckPinning]";
-    private static final String PHONE_WINDOW_MANAGER = "com.android.server.policy.PhoneWindowManager";
+    private static final String[] POWER_KEY_RULE_CLASS_CANDIDATES = {
+            "com.android.server.policy.PhoneWindowManager$PowerKeyRule",
+            "com.android.server.policy.PowerKeyRule"
+    };
 
-    private PowerLongPressUnpinHook() {
+    private PowerKeyRuleLongPressUnpinHook() {
     }
 
     public static void install(ClassLoader classLoader) {
+        Class<?> powerKeyRuleClass = findPowerKeyRuleClass(classLoader);
+        if (powerKeyRuleClass == null) {
+            XposedBridge.log(TAG + " failed to hook PowerKeyRule.onLongPress: class not found");
+            return;
+        }
+
         try {
-            Class<?> pwmClass = XposedHelpers.findClass(PHONE_WINDOW_MANAGER, classLoader);
-            XposedBridge.hookAllMethods(pwmClass, "powerLongPress", new XC_MethodHook() {
+            XposedBridge.hookAllMethods(powerKeyRuleClass, "onLongPress", new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
-                    handleBeforePowerLongPress(param);
+                    handleBeforePowerKeyRuleLongPress(param);
                 }
             });
-            XposedBridge.log(TAG + " hooked PhoneWindowManager.powerLongPress");
+            XposedBridge.log(TAG + " hooked " + powerKeyRuleClass.getName() + ".onLongPress");
         } catch (Throwable t) {
-            XposedBridge.log(TAG + " failed to hook powerLongPress: " + t);
+            XposedBridge.log(TAG + " failed to hook " + powerKeyRuleClass.getName() + ".onLongPress: " + t);
         }
     }
 
-    private static void handleBeforePowerLongPress(XC_MethodHook.MethodHookParam param) {
+    private static Class<?> findPowerKeyRuleClass(ClassLoader classLoader) {
+        for (String className : POWER_KEY_RULE_CLASS_CANDIDATES) {
+            try {
+                return XposedHelpers.findClass(className, classLoader);
+            } catch (Throwable ignored) {
+                // Try next candidate class name.
+            }
+        }
+        return null;
+    }
+
+    private static void handleBeforePowerKeyRuleLongPress(XC_MethodHook.MethodHookParam param) {
         try {
             Object atm = getActivityTaskManagerService();
             if (atm == null) {
@@ -59,16 +78,15 @@ public final class PowerLongPressUnpinHook {
             }
 
             stopSystemLockTaskMode(atm);
-            setPowerKeyHandledIfPresent(param.thisObject);
+            setPowerKeyHandledFromRuleIfPresent(param.thisObject);
 
-            // powerLongPress is void, consume the original logic when we already exited pinning.
+            // onLongPress is void, consume the original logic when we already exited pinning.
             param.setResult(null);
-            XposedBridge.log(TAG + " exited lock task mode via power long press");
+            XposedBridge.log(TAG + " exited lock task mode via PowerKeyRule.onLongPress");
         } catch (RemoteException e) {
             XposedBridge.log(TAG + " RemoteException when stopping lock task mode: " + e);
         } catch (Throwable t) {
-            // Never break power key behavior on failures.
-            XposedBridge.log(TAG + " unexpected failure, fallback to stock behavior: " + t);
+            XposedBridge.log(TAG + " PowerKeyRule.onLongPress hook failed, fallback to stock behavior: " + t);
         }
     }
 
@@ -115,7 +133,22 @@ public final class PowerLongPressUnpinHook {
         XposedHelpers.callMethod(atm, "stopLockTaskMode");
     }
 
-    private static void setPowerKeyHandledIfPresent(Object phoneWindowManager) {
+    private static void setPowerKeyHandledFromRuleIfPresent(Object ruleInstance) {
+        if (ruleInstance == null) {
+            return;
+        }
+
+        Object phoneWindowManager = null;
+        try {
+            phoneWindowManager = XposedHelpers.getObjectField(ruleInstance, "this$0");
+        } catch (Throwable ignored) {
+            // Some ROMs may not expose this$0.
+        }
+
+        if (phoneWindowManager == null) {
+            phoneWindowManager = ruleInstance;
+        }
+
         try {
             XposedHelpers.setBooleanField(phoneWindowManager, "mPowerKeyHandled", true);
         } catch (Throwable ignored) {
