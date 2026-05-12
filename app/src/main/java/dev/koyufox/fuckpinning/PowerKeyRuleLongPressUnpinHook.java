@@ -20,91 +20,102 @@
 package dev.koyufox.fuckpinning;
 
 import android.os.RemoteException;
+import android.util.Log;
+
+import java.lang.reflect.Method;
 
 import dev.koyufox.fuckpinning.utils.ActivityTaskManagerUtils;
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
+import io.github.libxposed.api.XposedInterface;
 
 public final class PowerKeyRuleLongPressUnpinHook {
-    private static final String TAG = "[FuckPinning]";
+    private static final String TAG = "FuckPinning";
     private static final String[] POWER_KEY_RULE_CLASS_CANDIDATES = {
             "com.android.server.policy.PhoneWindowManager$PowerKeyRule",
             "com.android.server.policy.PowerKeyRule"
     };
 
-    private PowerKeyRuleLongPressUnpinHook() {
+    private final XposedInterface ctx;
+    private final ClassLoader classLoader;
+
+    private PowerKeyRuleLongPressUnpinHook(XposedInterface ctx, ClassLoader classLoader) {
+        this.ctx = ctx;
+        this.classLoader = classLoader;
     }
 
-    public static void install(ClassLoader classLoader) {
-        Class<?> powerKeyRuleClass = findPowerKeyRuleClass(classLoader);
+    public static void install(XposedInterface ctx, ClassLoader classLoader) {
+        new PowerKeyRuleLongPressUnpinHook(ctx, classLoader).install();
+    }
+
+    private void install() {
+        Class<?> powerKeyRuleClass = findPowerKeyRuleClass();
         if (powerKeyRuleClass == null) {
-            XposedBridge.log(TAG + " failed to hook PowerKeyRule.onLongPress: class not found");
+            log(Log.WARN, TAG, "failed to hook PowerKeyRule.onLongPress: class not found");
             return;
         }
 
         try {
-            XposedBridge.hookAllMethods(powerKeyRuleClass, "onLongPress", new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) {
-                    handleBeforePowerKeyRuleLongPress(param);
+            for (Method method : powerKeyRuleClass.getDeclaredMethods()) {
+                if ("onLongPress".equals(method.getName())) {
+                    ctx.hook(method).intercept(chain -> {
+                        handleOnLongPress(chain);
+                        return null;
+                    });
                 }
-            });
-            XposedBridge.log(TAG + " hooked " + powerKeyRuleClass.getName() + ".onLongPress");
+            }
+            log(Log.INFO, TAG, "hooked " + powerKeyRuleClass.getName() + ".onLongPress");
         } catch (Throwable t) {
-            XposedBridge.log(TAG + " failed to hook " + powerKeyRuleClass.getName() + ".onLongPress: " + t);
+            log(Log.ERROR, TAG, "failed to hook " + powerKeyRuleClass.getName() + ".onLongPress", t);
         }
     }
 
-    private static Class<?> findPowerKeyRuleClass(ClassLoader classLoader) {
+    private Class<?> findPowerKeyRuleClass() {
         for (String className : POWER_KEY_RULE_CLASS_CANDIDATES) {
             try {
-                return XposedHelpers.findClass(className, classLoader);
+                return Class.forName(className, false, classLoader);
             } catch (Throwable ignored) {
-                // Try next candidate class name.
             }
         }
         return null;
     }
 
-    private static void handleBeforePowerKeyRuleLongPress(XC_MethodHook.MethodHookParam param) {
+    private void handleOnLongPress(XposedInterface.Chain chain) throws Throwable {
         try {
-            // LineageOS fires onLongPress(SingleKeyGestureEvent) three times per gesture
-            // (action=0 on press, action=1 on confirmed long-press, action=2 on cancel).
-            // Only exit pinning on the confirmed long-press (action=1).
-            // ZUI's onLongPress(long) has no getAction() — the reflection call fails
-            // and we proceed normally (it only fires once anyway).
-            if (param.args.length > 0 && param.args[0] != null) {
-                try {
-                    java.lang.reflect.Method getAction = param.args[0].getClass().getMethod("getAction");
-                    int action = ((Number) getAction.invoke(param.args[0])).intValue();
-                    if (action != 1) {
-                        return;
+            if (!chain.getArgs().isEmpty()) {
+                Object arg0 = chain.getArg(0);
+                if (arg0 != null) {
+                    try {
+                        Method getAction = arg0.getClass().getMethod("getAction");
+                        int action = ((Number) getAction.invoke(arg0)).intValue();
+                        if (action != 1) {
+                            chain.proceed();
+                            return;
+                        }
+                    } catch (NoSuchMethodException ignored) {
                     }
-                } catch (NoSuchMethodException ignored) {
-                    // Not a SingleKeyGestureEvent — proceed (ZUI path).
                 }
             }
 
             Object atm = ActivityTaskManagerUtils.getActivityTaskManagerService();
             if (atm == null) {
+                chain.proceed();
                 return;
             }
 
             if (!ActivityTaskManagerUtils.isInLockTaskMode(atm)) {
+                chain.proceed();
                 return;
             }
 
             ActivityTaskManagerUtils.stopSystemLockTaskMode(atm);
-            setPowerKeyHandledFromRuleIfPresent(param.thisObject);
+            setPowerKeyHandledFromRuleIfPresent(chain.getThisObject());
 
-            // onLongPress is void, consume the original logic when we already exited pinning.
-            param.setResult(null);
-            XposedBridge.log(TAG + " exited lock task mode via PowerKeyRule.onLongPress");
+            log(Log.INFO, TAG, "exited lock task mode via PowerKeyRule.onLongPress");
         } catch (RemoteException e) {
-            XposedBridge.log(TAG + " RemoteException when stopping lock task mode: " + e);
+            log(Log.ERROR, TAG, "RemoteException when stopping lock task mode", e);
+            chain.proceed();
         } catch (Throwable t) {
-            XposedBridge.log(TAG + " PowerKeyRule.onLongPress hook failed, fallback to stock behavior: " + t);
+            log(Log.ERROR, TAG, "PowerKeyRule.onLongPress hook failed, fallback to stock behavior", t);
+            chain.proceed();
         }
     }
 
@@ -115,9 +126,10 @@ public final class PowerKeyRuleLongPressUnpinHook {
 
         Object phoneWindowManager = null;
         try {
-            phoneWindowManager = XposedHelpers.getObjectField(ruleInstance, "this$0");
+            java.lang.reflect.Field f = ruleInstance.getClass().getDeclaredField("this$0");
+            f.setAccessible(true);
+            phoneWindowManager = f.get(ruleInstance);
         } catch (Throwable ignored) {
-            // Some ROMs may not expose this$0.
         }
 
         if (phoneWindowManager == null) {
@@ -125,9 +137,18 @@ public final class PowerKeyRuleLongPressUnpinHook {
         }
 
         try {
-            XposedHelpers.setBooleanField(phoneWindowManager, "mPowerKeyHandled", true);
+            java.lang.reflect.Field f = phoneWindowManager.getClass().getDeclaredField("mPowerKeyHandled");
+            f.setAccessible(true);
+            f.setBoolean(phoneWindowManager, true);
         } catch (Throwable ignored) {
-            // Optional field on some ROMs.
         }
+    }
+
+    private void log(int priority, String tag, String msg) {
+        ctx.log(priority, tag, msg);
+    }
+
+    private void log(int priority, String tag, String msg, Throwable t) {
+        ctx.log(priority, tag, msg, t);
     }
 }

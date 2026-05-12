@@ -19,32 +19,51 @@
 
 package dev.koyufox.fuckpinning;
 
-import de.robv.android.xposed.XC_MethodReplacement;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
+import android.util.Log;
+
+import java.lang.reflect.Method;
+
+import io.github.libxposed.api.XposedInterface;
 
 public final class HyperosLauncherGestureBlockHook {
-    private static final String TAG = "[FuckPinning]";
+    private static final String TAG = "FuckPinning";
     private static final String HELPER_CLASS = "com.miui.home.recents.ScreenPinnedHelper";
 
-    private HyperosLauncherGestureBlockHook() {
+    private final XposedInterface ctx;
+    private final ClassLoader classLoader;
+
+    private HyperosLauncherGestureBlockHook(XposedInterface ctx, ClassLoader classLoader) {
+        this.ctx = ctx;
+        this.classLoader = classLoader;
     }
 
-    public static void install(ClassLoader classLoader) {
+    public static void install(XposedInterface ctx, ClassLoader classLoader) {
+        new HyperosLauncherGestureBlockHook(ctx, classLoader).install();
+    }
+
+    private void install() {
         try {
-            Class<?> helperClass = XposedHelpers.findClass(HELPER_CLASS, classLoader);
-            
-            // 直接替换掉 stopScreenPinning 方法，让它什么都不做
-            XposedBridge.hookAllMethods(helperClass, "stopScreenPinning", new XC_MethodReplacement() {
-                @Override
-                protected Object replaceHookedMethod(MethodHookParam param) throws Throwable {
-                    XposedBridge.log(TAG + " blocked MIUI/HyperOS gesture from stopping screen pinning");
-                    return null; // 对于 void 方法，返回 null 即可
+            Class<?> helperClass = Class.forName(HELPER_CLASS, false, classLoader);
+
+            for (Method method : helperClass.getDeclaredMethods()) {
+                if ("stopScreenPinning".equals(method.getName())) {
+                    ctx.hook(method).intercept(chain -> {
+                        log(Log.INFO, TAG, "blocked MIUI/HyperOS gesture from stopping screen pinning");
+                        return null;
+                    });
                 }
-            });
-            XposedBridge.log(TAG + " hooked ScreenPinnedHelper.stopScreenPinning");
+            }
+            log(Log.INFO, TAG, "hooked ScreenPinnedHelper.stopScreenPinning");
         } catch (Throwable t) {
-            XposedBridge.log(TAG + " failed to hook MIUI ScreenPinnedHelper.stopScreenPinning: " + t);
+            log(Log.ERROR, TAG, "failed to hook MIUI ScreenPinnedHelper.stopScreenPinning", t);
         }
+    }
+
+    private void log(int priority, String tag, String msg) {
+        ctx.log(priority, tag, msg);
+    }
+
+    private void log(int priority, String tag, String msg, Throwable t) {
+        ctx.log(priority, tag, msg, t);
     }
 }

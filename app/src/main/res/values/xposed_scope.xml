@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string-array name="xposed_scope">
-        <item>android</item>
-        <item>com.zui.launcher</item>
-        <item>com.android.launcher3</item>
-        <item>com.miui.home</item>
-    </string-array>
-</resources>

@@ -20,11 +20,13 @@
 package dev.koyufox.fuckpinning;
 
 import android.os.RemoteException;
+import android.util.Log;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 
 import dev.koyufox.fuckpinning.utils.ActivityTaskManagerUtils;
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
+import io.github.libxposed.api.XposedInterface;
 
 /**
  * Hooks the MIUI-specific PowerKeyRule.onMiuiLongPress(long) to exit screen pinning
@@ -45,53 +47,63 @@ import de.robv.android.xposed.XposedHelpers;
  * By hooking {@code onMiuiLongPress()} we intercept before XiaoAi launches.
  */
 public final class HyperosPowerKeyRuleLongPressUnpinHook {
-    private static final String TAG = "[FuckPinning]";
+    private static final String TAG = "FuckPinning";
     private static final String MIUI_POWER_KEY_RULE_CLASS =
             "com.android.server.input.shortcut.singlekeyrule.PowerKeyRule";
 
-    private HyperosPowerKeyRuleLongPressUnpinHook() {
+    private final XposedInterface ctx;
+    private final ClassLoader classLoader;
+
+    private HyperosPowerKeyRuleLongPressUnpinHook(XposedInterface ctx, ClassLoader classLoader) {
+        this.ctx = ctx;
+        this.classLoader = classLoader;
     }
 
-    public static void install(ClassLoader classLoader) {
+    public static void install(XposedInterface ctx, ClassLoader classLoader) {
+        new HyperosPowerKeyRuleLongPressUnpinHook(ctx, classLoader).install();
+    }
+
+    private void install() {
         try {
-            Class<?> miuiPowerKeyRuleClass = XposedHelpers.findClass(MIUI_POWER_KEY_RULE_CLASS, classLoader);
-            XposedBridge.hookAllMethods(miuiPowerKeyRuleClass, "onMiuiLongPress", new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) {
-                    handleBeforeMiuiLongPress(param);
+            Class<?> miuiPowerKeyRuleClass = Class.forName(MIUI_POWER_KEY_RULE_CLASS, false, classLoader);
+            for (Method method : miuiPowerKeyRuleClass.getDeclaredMethods()) {
+                if ("onMiuiLongPress".equals(method.getName())) {
+                    ctx.hook(method).intercept(chain -> {
+                        handleBeforeMiuiLongPress(chain);
+                        return null;
+                    });
                 }
-            });
-            XposedBridge.log(TAG + " hooked " + MIUI_POWER_KEY_RULE_CLASS + ".onMiuiLongPress");
+            }
+            log(Log.INFO, TAG, "hooked " + MIUI_POWER_KEY_RULE_CLASS + ".onMiuiLongPress");
         } catch (Throwable t) {
-            XposedBridge.log(TAG + " failed to hook MIUI PowerKeyRule.onMiuiLongPress: " + t);
+            log(Log.ERROR, TAG, "failed to hook MIUI PowerKeyRule.onMiuiLongPress", t);
         }
     }
 
-    private static void handleBeforeMiuiLongPress(XC_MethodHook.MethodHookParam param) {
+    private void handleBeforeMiuiLongPress(XposedInterface.Chain chain) throws Throwable {
         try {
             Object atm = ActivityTaskManagerUtils.getActivityTaskManagerService();
             if (atm == null) {
+                chain.proceed();
                 return;
             }
 
             if (!ActivityTaskManagerUtils.isInLockTaskMode(atm)) {
+                chain.proceed();
                 return;
             }
 
             ActivityTaskManagerUtils.stopSystemLockTaskMode(atm);
 
-            // Mark power key as handled so the rest of the system doesn't
-            // try to process it further.
-            setPowerKeyHandled(param.thisObject);
+            setPowerKeyHandled(chain.getThisObject());
 
-            // onMiuiLongPress is void; consume it — prevents XiaoAi launch
-            // and prevents fallback to OriginalPowerKeyRuleBridge.
-            param.setResult(null);
-            XposedBridge.log(TAG + " exited lock task mode via power key long press (HyperOS)");
+            log(Log.INFO, TAG, "exited lock task mode via power key long press (HyperOS)");
         } catch (RemoteException e) {
-            XposedBridge.log(TAG + " RemoteException when stopping lock task mode: " + e);
+            log(Log.ERROR, TAG, "RemoteException when stopping lock task mode", e);
+            chain.proceed();
         } catch (Throwable t) {
-            XposedBridge.log(TAG + " MIUI PowerKeyRule.onMiuiLongPress hook failed: " + t);
+            log(Log.ERROR, TAG, "MIUI PowerKeyRule.onMiuiLongPress hook failed", t);
+            chain.proceed();
         }
     }
 
@@ -101,16 +113,22 @@ public final class HyperosPowerKeyRuleLongPressUnpinHook {
         }
 
         try {
-            // Access mWindowManagerPolicy field which holds the WindowManagerPolicy
-            // (BaseMiuiPhoneWindowManager/PhoneWindowManager).
-            Object wmPolicy = XposedHelpers.getObjectField(ruleInstance, "mWindowManagerPolicy");
+            Field wmPolicyField = ruleInstance.getClass().getDeclaredField("mWindowManagerPolicy");
+            wmPolicyField.setAccessible(true);
+            Object wmPolicy = wmPolicyField.get(ruleInstance);
             if (wmPolicy != null) {
-                XposedHelpers.callMethod(wmPolicy, "setPowerKeyHandled", true);
+                Method setPowerKeyHandled = wmPolicy.getClass().getMethod("setPowerKeyHandled", boolean.class);
+                setPowerKeyHandled.invoke(wmPolicy, true);
             }
         } catch (Throwable ignored) {
-            // The setPowerKeyHandled call inside the original onMiuiLongPress
-            // already ran before triggerLongPress, but since we block the method,
-            // we set it manually as a safety measure.
         }
+    }
+
+    private void log(int priority, String tag, String msg) {
+        ctx.log(priority, tag, msg);
+    }
+
+    private void log(int priority, String tag, String msg, Throwable t) {
+        ctx.log(priority, tag, msg, t);
     }
 }

@@ -19,20 +19,21 @@
 
 package dev.koyufox.fuckpinning;
 
+import android.util.Log;
+
 import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
-import de.robv.android.xposed.XC_MethodHook;
-import de.robv.android.xposed.XposedBridge;
+import io.github.libxposed.api.XposedInterface;
 import org.luckypray.dexkit.DexKitBridge;
 import org.luckypray.dexkit.query.FindMethod;
 import org.luckypray.dexkit.query.matchers.MethodMatcher;
 import org.luckypray.dexkit.result.MethodData;
 
 public final class DefaultScreenPinnedInputConsumerHook {
-    private static final String TAG = "[FuckPinning]";
+    private static final String TAG = "FuckPinning";
     private static final String SCREEN_PINNED_CONSUMER_CLASS = "com.android.quickstep.inputconsumers.ScreenPinnedInputConsumer";
     private static final String QUICKSTEP_PACKAGE = "com.android.quickstep";
     private static final String CONTEXT_CLASS = "android.content.Context";
@@ -40,22 +41,31 @@ public final class DefaultScreenPinnedInputConsumerHook {
     private static volatile boolean dexKitLoadAttempted;
     private static volatile boolean dexKitLoaded;
 
-    private DefaultScreenPinnedInputConsumerHook() {
+    private final XposedInterface ctx;
+    private final ClassLoader classLoader;
+
+    private DefaultScreenPinnedInputConsumerHook(XposedInterface ctx, ClassLoader classLoader) {
+        this.ctx = ctx;
+        this.classLoader = classLoader;
     }
 
-    public static void install(ClassLoader classLoader) {
+    public static void install(XposedInterface ctx, ClassLoader classLoader) {
+        new DefaultScreenPinnedInputConsumerHook(ctx, classLoader).install();
+    }
+
+    private void install() {
         if (!ensureDexKitLoaded()) {
-            XposedBridge.log(TAG + " DexKit unavailable, skip install");
+            log(Log.WARN, TAG, "DexKit unavailable, skip install");
             return;
         }
 
-        boolean installed = installScreenPinnedConsumerHookWithDexKit(classLoader);
+        boolean installed = installScreenPinnedConsumerHookWithDexKit();
         if (installed) {
-            XposedBridge.log(TAG + " DexKit ScreenPinnedInputConsumer hook active");
+            log(Log.INFO, TAG, "DexKit ScreenPinnedInputConsumer hook active");
             return;
         }
 
-        XposedBridge.log(TAG + " DexKit hook not matched");
+        log(Log.WARN, TAG, "DexKit hook not matched");
     }
 
     private static synchronized boolean ensureDexKitLoaded() {
@@ -67,15 +77,13 @@ public final class DefaultScreenPinnedInputConsumerHook {
         try {
             System.loadLibrary("dexkit");
             dexKitLoaded = true;
-            XposedBridge.log(TAG + " DexKit native library loaded");
-        } catch (Throwable t) {
+        } catch (Throwable ignored) {
             dexKitLoaded = false;
-            XposedBridge.log(TAG + " failed to load DexKit native library: " + t);
         }
         return dexKitLoaded;
     }
 
-    private static boolean installScreenPinnedConsumerHookWithDexKit(ClassLoader classLoader) {
+    private boolean installScreenPinnedConsumerHookWithDexKit() {
         try (DexKitBridge bridge = DexKitBridge.create(classLoader, false)) {
             FindMethod query = new FindMethod()
                     .searchPackages(QUICKSTEP_PACKAGE)
@@ -98,7 +106,7 @@ public final class DefaultScreenPinnedInputConsumerHook {
                     continue;
                 }
 
-                Method method = resolveMethod(methodData, classLoader);
+                Method method = resolveMethod(methodData);
                 if (method == null) {
                     continue;
                 }
@@ -110,50 +118,46 @@ public final class DefaultScreenPinnedInputConsumerHook {
                     continue;
                 }
 
-                XposedBridge.hookMethod(method, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) {
-                        handleBeforePrimaryMethod(param, method);
-                    }
+                ctx.hook(method).intercept(chain -> {
+                    handleBlock(chain);
+                    return null;
                 });
-                XposedBridge.log(TAG + " hooked primary method candidate: " + formatMethod(method));
+                log(Log.INFO, TAG, "hooked primary method candidate: " + formatMethod(method));
             }
 
-            XposedBridge.log(TAG + " DexKit candidates scanned: " + candidateCount);
+            log(Log.INFO, TAG, "DexKit candidates scanned: " + candidateCount);
 
             if (!hookedMethodSigns.isEmpty()) {
-                XposedBridge.log(TAG + " DexKit hook candidates matched: " + hookedMethodSigns.size());
+                log(Log.INFO, TAG, "DexKit hook candidates matched: " + hookedMethodSigns.size());
                 return true;
             }
 
-            XposedBridge.log(TAG + " DexKit no method candidate matched in " + SCREEN_PINNED_CONSUMER_CLASS);
+            log(Log.WARN, TAG, "DexKit no method candidate matched in " + SCREEN_PINNED_CONSUMER_CLASS);
             return false;
         } catch (Throwable t) {
-            XposedBridge.log(TAG + " DexKit hook install failed: " + t);
+            log(Log.ERROR, TAG, "DexKit hook install failed", t);
             return false;
         }
     }
 
-    private static Method resolveMethod(MethodData methodData, ClassLoader classLoader) {
+    private Method resolveMethod(MethodData methodData) {
         try {
             return methodData.getMethodInstance(classLoader);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + " failed to resolve DexKit method instance: " + t);
+            log(Log.ERROR, TAG, "failed to resolve DexKit method instance", t);
             return null;
         }
     }
 
-    private static void handleBeforePrimaryMethod(XC_MethodHook.MethodHookParam param, Method method) {
+    private void handleBlock(XposedInterface.Chain chain) throws Throwable {
         try {
-            if (!isScreenPinnedConsumer(param.thisObject)) {
+            if (!isScreenPinnedConsumer(chain.getThisObject())) {
+                chain.proceed();
                 return;
             }
-
-            // Short-circuit the pin-exit action path while keeping launcher event loop intact.
-            param.setResult(null);
-            XposedBridge.log(TAG + " blocked primary method: " + formatMethod(method));
         } catch (Throwable t) {
-            XposedBridge.log(TAG + " primary method hook failed, keep stock behavior: " + t);
+            log(Log.ERROR, TAG, "primary method hook failed, keep stock behavior", t);
+            chain.proceed();
         }
     }
 
@@ -190,5 +194,13 @@ public final class DefaultScreenPinnedInputConsumerHook {
 
         String lower = className.toLowerCase(Locale.ROOT);
         return lower.contains("screen") && lower.contains("pinned") && lower.contains("consumer");
+    }
+
+    private void log(int priority, String tag, String msg) {
+        ctx.log(priority, tag, msg);
+    }
+
+    private void log(int priority, String tag, String msg, Throwable t) {
+        ctx.log(priority, tag, msg, t);
     }
 }

@@ -20,43 +20,44 @@
 package dev.koyufox.fuckpinning.utils;
 
 import android.os.RemoteException;
+import android.util.Log;
 
-import de.robv.android.xposed.XposedBridge;
-import de.robv.android.xposed.XposedHelpers;
+import java.lang.reflect.Method;
 
 public final class ActivityTaskManagerUtils {
-    private static final String TAG = "[FuckPinning]";
+    private static final String TAG = "FuckPinning";
 
     private ActivityTaskManagerUtils() {
     }
 
     public static Object getActivityTaskManagerService() {
         try {
-            Class<?> atmClass = XposedHelpers.findClass("android.app.ActivityTaskManager", null);
-            return XposedHelpers.callStaticMethod(atmClass, "getService");
+            Class<?> atmClass = Class.forName("android.app.ActivityTaskManager");
+            Method getService = atmClass.getDeclaredMethod("getService");
+            return getService.invoke(null);
         } catch (Throwable t) {
-            XposedBridge.log(TAG + " ActivityTaskManager.getService unavailable: " + t);
+            Log.w(TAG, "ActivityTaskManager.getService unavailable: " + t);
             return null;
         }
     }
 
     public static boolean isInLockTaskMode(Object atm) throws RemoteException {
         try {
-            Object result = XposedHelpers.callMethod(atm, "isInLockTaskMode");
+            Method isInLockTaskMode = atm.getClass().getMethod("isInLockTaskMode");
+            Object result = isInLockTaskMode.invoke(atm);
             if (result instanceof Boolean) {
                 return (Boolean) result;
             }
         } catch (Throwable ignored) {
-            // Keep compatibility with ROMs where binder method name changed.
         }
 
         try {
-            Object stateObj = XposedHelpers.callMethod(atm, "getLockTaskModeState");
+            Method getLockTaskModeState = atm.getClass().getMethod("getLockTaskModeState");
+            Object stateObj = getLockTaskModeState.invoke(atm);
             if (stateObj instanceof Integer) {
                 return ((Integer) stateObj) != 0;
             }
         } catch (Throwable ignored) {
-            // Fall through to false.
         }
 
         return false;
@@ -64,12 +65,16 @@ public final class ActivityTaskManagerUtils {
 
     public static void stopSystemLockTaskMode(Object atm) throws RemoteException {
         try {
-            XposedHelpers.callMethod(atm, "stopSystemLockTaskMode");
+            Method stopSystemLockTaskMode = atm.getClass().getMethod("stopSystemLockTaskMode");
+            stopSystemLockTaskMode.invoke(atm);
             return;
         } catch (Throwable ignored) {
-            // Fall back for ROM variants.
         }
 
-        XposedHelpers.callMethod(atm, "stopLockTaskMode");
+        try {
+            Method stopLockTaskMode = atm.getClass().getMethod("stopLockTaskMode");
+            stopLockTaskMode.invoke(atm);
+        } catch (Throwable ignored) {
+        }
     }
 }
