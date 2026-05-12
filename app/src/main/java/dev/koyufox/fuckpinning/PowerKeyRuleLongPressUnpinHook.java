@@ -21,6 +21,7 @@ package dev.koyufox.fuckpinning;
 
 import android.os.RemoteException;
 
+import dev.koyufox.fuckpinning.utils.ActivityTaskManagerUtils;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
@@ -85,16 +86,16 @@ public final class PowerKeyRuleLongPressUnpinHook {
                 }
             }
 
-            Object atm = getActivityTaskManagerService();
+            Object atm = ActivityTaskManagerUtils.getActivityTaskManagerService();
             if (atm == null) {
                 return;
             }
 
-            if (!isInLockTaskMode(atm)) {
+            if (!ActivityTaskManagerUtils.isInLockTaskMode(atm)) {
                 return;
             }
 
-            stopSystemLockTaskMode(atm);
+            ActivityTaskManagerUtils.stopSystemLockTaskMode(atm);
             setPowerKeyHandledFromRuleIfPresent(param.thisObject);
 
             // onLongPress is void, consume the original logic when we already exited pinning.
@@ -105,49 +106,6 @@ public final class PowerKeyRuleLongPressUnpinHook {
         } catch (Throwable t) {
             XposedBridge.log(TAG + " PowerKeyRule.onLongPress hook failed, fallback to stock behavior: " + t);
         }
-    }
-
-    private static Object getActivityTaskManagerService() {
-        try {
-            Class<?> atmClass = XposedHelpers.findClass("android.app.ActivityTaskManager", null);
-            return XposedHelpers.callStaticMethod(atmClass, "getService");
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + " ActivityTaskManager.getService unavailable: " + t);
-            return null;
-        }
-    }
-
-    private static boolean isInLockTaskMode(Object atm) throws RemoteException {
-        try {
-            Object result = XposedHelpers.callMethod(atm, "isInLockTaskMode");
-            if (result instanceof Boolean) {
-                return (Boolean) result;
-            }
-        } catch (Throwable ignored) {
-            // Keep compatibility with ROMs where binder method name changed.
-        }
-
-        try {
-            Object stateObj = XposedHelpers.callMethod(atm, "getLockTaskModeState");
-            if (stateObj instanceof Integer) {
-                return ((Integer) stateObj) != 0;
-            }
-        } catch (Throwable ignored) {
-            // Fall through to false.
-        }
-
-        return false;
-    }
-
-    private static void stopSystemLockTaskMode(Object atm) throws RemoteException {
-        try {
-            XposedHelpers.callMethod(atm, "stopSystemLockTaskMode");
-            return;
-        } catch (Throwable ignored) {
-            // Fall back for ROM variants.
-        }
-
-        XposedHelpers.callMethod(atm, "stopLockTaskMode");
     }
 
     private static void setPowerKeyHandledFromRuleIfPresent(Object ruleInstance) {
