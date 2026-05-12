@@ -2,8 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:allowBackup="false"
-        android:description="@android:string/unknownName"
+        android:description="@string/module_description"
         android:hasCode="true"
         android:label="FuckPinning">
     </application>

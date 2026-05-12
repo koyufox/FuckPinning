@@ -10,8 +10,8 @@ android {
         applicationId "dev.koyufox.fuckpinning"
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode 26
+        versionName "ce6c783"
     }
 
     buildTypes {
