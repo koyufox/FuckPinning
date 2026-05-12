@@ -34,8 +34,8 @@ public final class XposedInit implements IXposedHookLoadPackage {
         if ("android".equals(lpparam.packageName)) {
             XposedBridge.log(TAG + " loaded in android process");
             if (isHyperOsCode816()) {
-                XposedBridge.log(TAG + " detected HyperOS code " + TARGET_HYPEROS_CODE + ", using two-keys combo hook");
-                HyperosTwoKeysCombinationRuleHook.install(lpparam.classLoader);
+                XposedBridge.log(TAG + " detected HyperOS code " + TARGET_HYPEROS_CODE);
+                HyperosPowerKeyRuleLongPressUnpinHook.install(lpparam.classLoader);
             } else {
                 PowerKeyRuleLongPressUnpinHook.install(lpparam.classLoader);
             }

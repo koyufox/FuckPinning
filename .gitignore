@@ -3,3 +3,8 @@
 .reverse/
 app/build/
 build/
+local.properties
+CLAUDE.md
+.claude/
+.idea/
+.pensieve/
