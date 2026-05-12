@@ -68,6 +68,23 @@ public final class PowerKeyRuleLongPressUnpinHook {
 
     private static void handleBeforePowerKeyRuleLongPress(XC_MethodHook.MethodHookParam param) {
         try {
+            // LineageOS fires onLongPress(SingleKeyGestureEvent) three times per gesture
+            // (action=0 on press, action=1 on confirmed long-press, action=2 on cancel).
+            // Only exit pinning on the confirmed long-press (action=1).
+            // ZUI's onLongPress(long) has no getAction() — the reflection call fails
+            // and we proceed normally (it only fires once anyway).
+            if (param.args.length > 0 && param.args[0] != null) {
+                try {
+                    java.lang.reflect.Method getAction = param.args[0].getClass().getMethod("getAction");
+                    int action = ((Number) getAction.invoke(param.args[0])).intValue();
+                    if (action != 1) {
+                        return;
+                    }
+                } catch (NoSuchMethodException ignored) {
+                    // Not a SingleKeyGestureEvent — proceed (ZUI path).
+                }
+            }
+
             Object atm = getActivityTaskManagerService();
             if (atm == null) {
                 return;
