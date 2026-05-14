@@ -9,3 +9,5 @@ CLAUDE.md
 .idea/
 .pensieve/
 app/release/
+app/debug/
+gradle/gradle-daemon-jvm.properties

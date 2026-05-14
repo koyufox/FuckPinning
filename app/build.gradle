@@ -4,20 +4,23 @@ plugins {
 
 android {
     namespace "dev.koyufox.fuckpinning"
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "dev.koyufox.fuckpinning"
         minSdk 26
-        targetSdk 34
+        targetSdk 35
         versionCode 26
-        versionName "ce6c783"
+        versionName '1.0.0'
+        versionNameSuffix '-ce6c783'
+        proguardFiles
     }
 
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            multiDexEnabled true
         }
         debug {
             minifyEnabled false
@@ -39,6 +42,6 @@ android {
 
 dependencies {
     compileOnly("io.github.libxposed:api:101.0.1")
-    compileOnly "androidx.annotation:annotation:1.9.0"
-    implementation "org.luckypray:dexkit:2.0.7"
+    compileOnly 'androidx.annotation:annotation:1.10.0'
+    implementation 'org.luckypray:dexkit:2.2.0'
 }

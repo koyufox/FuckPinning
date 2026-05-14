@@ -19,10 +19,13 @@
 
 package dev.koyufox.fuckpinning.utils;
 
+import android.annotation.SuppressLint;
 import android.os.RemoteException;
 
 import java.lang.reflect.Method;
 
+// Xposed module runs inside system_server where hidden API restrictions do not apply.
+@SuppressLint("BlockedPrivateApi")
 public final class ActivityTaskManagerUtils {
 
     private ActivityTaskManagerUtils() {
