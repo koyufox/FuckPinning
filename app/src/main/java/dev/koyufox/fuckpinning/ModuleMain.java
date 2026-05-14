@@ -19,33 +19,32 @@
 
 package dev.koyufox.fuckpinning;
 
-import android.util.Log;
-
 import androidx.annotation.NonNull;
 
+import dev.koyufox.fuckpinning.utils.ModuleLog;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.api.XposedModuleInterface;
 
 public final class ModuleMain extends XposedModule {
-    private static final String TAG = "FuckPinning";
     private static final String MIUI_VERSION_CODE_PROP = "ro.miui.ui.version.code";
     private static final String TARGET_HYPEROS_CODE = "816";
 
     @Override
     public void onModuleLoaded(@NonNull ModuleLoadedParam param) {
-        log(Log.INFO, TAG, "loaded in " + param.getProcessName()
+        ModuleLog.init(this);
+        ModuleLog.i("loaded in " + param.getProcessName()
                 + " (isSystemServer=" + param.isSystemServer() + ")");
-        log(Log.INFO, TAG, "framework: " + getFrameworkName()
+        ModuleLog.i("framework: " + getFrameworkName()
                 + " v" + getFrameworkVersionCode() + " API " + getApiVersion());
     }
 
     @Override
     public void onSystemServerStarting(@NonNull SystemServerStartingParam param) {
-        log(Log.INFO, TAG, "system server starting, installing power key hooks");
+        ModuleLog.i("system server starting, installing power key hooks");
         ClassLoader classLoader = param.getClassLoader();
 
         if (isHyperOsCode816()) {
-            log(Log.INFO, TAG, "detected HyperOS code " + TARGET_HYPEROS_CODE);
+            ModuleLog.i("detected HyperOS code " + TARGET_HYPEROS_CODE);
             HyperosPowerKeyRuleLongPressUnpinHook.install(this, classLoader);
         } else {
             PowerKeyRuleLongPressUnpinHook.install(this, classLoader);
@@ -58,10 +57,10 @@ public final class ModuleMain extends XposedModule {
         ClassLoader classLoader = param.getClassLoader();
 
         if ("com.zui.launcher".equals(packageName) || "com.android.launcher3".equals(packageName)) {
-            log(Log.INFO, TAG, "installing launcher gesture block for " + packageName);
+            ModuleLog.i("installing launcher gesture block for " + packageName);
             DefaultScreenPinnedInputConsumerHook.install(this, classLoader);
         } else if ("com.miui.home".equals(packageName)) {
-            log(Log.INFO, TAG, "installing MIUI launcher gesture block for " + packageName);
+            ModuleLog.i("installing MIUI launcher gesture block for " + packageName);
             HyperosLauncherGestureBlockHook.install(this, classLoader);
         }
     }

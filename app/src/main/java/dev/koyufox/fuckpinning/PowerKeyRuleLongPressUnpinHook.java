@@ -20,15 +20,14 @@
 package dev.koyufox.fuckpinning;
 
 import android.os.RemoteException;
-import android.util.Log;
 
 import java.lang.reflect.Method;
 
 import dev.koyufox.fuckpinning.utils.ActivityTaskManagerUtils;
+import dev.koyufox.fuckpinning.utils.ModuleLog;
 import io.github.libxposed.api.XposedInterface;
 
 public final class PowerKeyRuleLongPressUnpinHook {
-    private static final String TAG = "FuckPinning";
     private static final String[] POWER_KEY_RULE_CLASS_CANDIDATES = {
             "com.android.server.policy.PhoneWindowManager$PowerKeyRule",
             "com.android.server.policy.PowerKeyRule"
@@ -49,7 +48,7 @@ public final class PowerKeyRuleLongPressUnpinHook {
     private void install() {
         Class<?> powerKeyRuleClass = findPowerKeyRuleClass();
         if (powerKeyRuleClass == null) {
-            log(Log.WARN, TAG, "failed to hook PowerKeyRule.onLongPress: class not found");
+            ModuleLog.w("failed to hook PowerKeyRule.onLongPress: class not found");
             return;
         }
 
@@ -62,9 +61,9 @@ public final class PowerKeyRuleLongPressUnpinHook {
                     });
                 }
             }
-            log(Log.INFO, TAG, "hooked " + powerKeyRuleClass.getName() + ".onLongPress");
+            ModuleLog.i("hooked " + powerKeyRuleClass.getName() + ".onLongPress");
         } catch (Throwable t) {
-            log(Log.ERROR, TAG, "failed to hook " + powerKeyRuleClass.getName() + ".onLongPress", t);
+            ModuleLog.e("failed to hook " + powerKeyRuleClass.getName() + ".onLongPress", t);
         }
     }
 
@@ -78,7 +77,7 @@ public final class PowerKeyRuleLongPressUnpinHook {
         return null;
     }
 
-    private void handleOnLongPress(XposedInterface.Chain chain) throws Throwable {
+    private static void handleOnLongPress(XposedInterface.Chain chain) throws Throwable {
         try {
             if (!chain.getArgs().isEmpty()) {
                 Object arg0 = chain.getArg(0);
@@ -109,12 +108,12 @@ public final class PowerKeyRuleLongPressUnpinHook {
             ActivityTaskManagerUtils.stopSystemLockTaskMode(atm);
             setPowerKeyHandledFromRuleIfPresent(chain.getThisObject());
 
-            log(Log.INFO, TAG, "exited lock task mode via PowerKeyRule.onLongPress");
+            ModuleLog.i("exited lock task mode via PowerKeyRule.onLongPress");
         } catch (RemoteException e) {
-            log(Log.ERROR, TAG, "RemoteException when stopping lock task mode", e);
+            ModuleLog.e("RemoteException when stopping lock task mode", e);
             chain.proceed();
         } catch (Throwable t) {
-            log(Log.ERROR, TAG, "PowerKeyRule.onLongPress hook failed, fallback to stock behavior", t);
+            ModuleLog.e("PowerKeyRule.onLongPress hook failed, fallback to stock behavior", t);
             chain.proceed();
         }
     }
@@ -142,13 +141,5 @@ public final class PowerKeyRuleLongPressUnpinHook {
             f.setBoolean(phoneWindowManager, true);
         } catch (Throwable ignored) {
         }
-    }
-
-    private void log(int priority, String tag, String msg) {
-        ctx.log(priority, tag, msg);
-    }
-
-    private void log(int priority, String tag, String msg, Throwable t) {
-        ctx.log(priority, tag, msg, t);
     }
 }

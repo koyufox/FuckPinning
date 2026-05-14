@@ -20,12 +20,12 @@
 package dev.koyufox.fuckpinning;
 
 import android.os.RemoteException;
-import android.util.Log;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 import dev.koyufox.fuckpinning.utils.ActivityTaskManagerUtils;
+import dev.koyufox.fuckpinning.utils.ModuleLog;
 import io.github.libxposed.api.XposedInterface;
 
 /**
@@ -47,7 +47,6 @@ import io.github.libxposed.api.XposedInterface;
  * By hooking {@code onMiuiLongPress()} we intercept before XiaoAi launches.
  */
 public final class HyperosPowerKeyRuleLongPressUnpinHook {
-    private static final String TAG = "FuckPinning";
     private static final String MIUI_POWER_KEY_RULE_CLASS =
             "com.android.server.input.shortcut.singlekeyrule.PowerKeyRule";
 
@@ -74,13 +73,13 @@ public final class HyperosPowerKeyRuleLongPressUnpinHook {
                     });
                 }
             }
-            log(Log.INFO, TAG, "hooked " + MIUI_POWER_KEY_RULE_CLASS + ".onMiuiLongPress");
+            ModuleLog.i("hooked " + MIUI_POWER_KEY_RULE_CLASS + ".onMiuiLongPress");
         } catch (Throwable t) {
-            log(Log.ERROR, TAG, "failed to hook MIUI PowerKeyRule.onMiuiLongPress", t);
+            ModuleLog.e("failed to hook MIUI PowerKeyRule.onMiuiLongPress", t);
         }
     }
 
-    private void handleBeforeMiuiLongPress(XposedInterface.Chain chain) throws Throwable {
+    private static void handleBeforeMiuiLongPress(XposedInterface.Chain chain) throws Throwable {
         try {
             Object atm = ActivityTaskManagerUtils.getActivityTaskManagerService();
             if (atm == null) {
@@ -97,12 +96,12 @@ public final class HyperosPowerKeyRuleLongPressUnpinHook {
 
             setPowerKeyHandled(chain.getThisObject());
 
-            log(Log.INFO, TAG, "exited lock task mode via power key long press (HyperOS)");
+            ModuleLog.i("exited lock task mode via power key long press (HyperOS)");
         } catch (RemoteException e) {
-            log(Log.ERROR, TAG, "RemoteException when stopping lock task mode", e);
+            ModuleLog.e("RemoteException when stopping lock task mode", e);
             chain.proceed();
         } catch (Throwable t) {
-            log(Log.ERROR, TAG, "MIUI PowerKeyRule.onMiuiLongPress hook failed", t);
+            ModuleLog.e("MIUI PowerKeyRule.onMiuiLongPress hook failed", t);
             chain.proceed();
         }
     }
@@ -122,13 +121,5 @@ public final class HyperosPowerKeyRuleLongPressUnpinHook {
             }
         } catch (Throwable ignored) {
         }
-    }
-
-    private void log(int priority, String tag, String msg) {
-        ctx.log(priority, tag, msg);
-    }
-
-    private void log(int priority, String tag, String msg, Throwable t) {
-        ctx.log(priority, tag, msg, t);
     }
 }

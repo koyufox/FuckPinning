@@ -19,14 +19,12 @@
 
 package dev.koyufox.fuckpinning;
 
-import android.util.Log;
-
 import java.lang.reflect.Method;
 
+import dev.koyufox.fuckpinning.utils.ModuleLog;
 import io.github.libxposed.api.XposedInterface;
 
 public final class HyperosLauncherGestureBlockHook {
-    private static final String TAG = "FuckPinning";
     private static final String HELPER_CLASS = "com.miui.home.recents.ScreenPinnedHelper";
 
     private final XposedInterface ctx;
@@ -48,22 +46,14 @@ public final class HyperosLauncherGestureBlockHook {
             for (Method method : helperClass.getDeclaredMethods()) {
                 if ("stopScreenPinning".equals(method.getName())) {
                     ctx.hook(method).intercept(chain -> {
-                        log(Log.INFO, TAG, "blocked MIUI/HyperOS gesture from stopping screen pinning");
+                        ModuleLog.i("blocked MIUI/HyperOS gesture from stopping screen pinning");
                         return null;
                     });
                 }
             }
-            log(Log.INFO, TAG, "hooked ScreenPinnedHelper.stopScreenPinning");
+            ModuleLog.i("hooked ScreenPinnedHelper.stopScreenPinning");
         } catch (Throwable t) {
-            log(Log.ERROR, TAG, "failed to hook MIUI ScreenPinnedHelper.stopScreenPinning", t);
+            ModuleLog.e("failed to hook MIUI ScreenPinnedHelper.stopScreenPinning", t);
         }
-    }
-
-    private void log(int priority, String tag, String msg) {
-        ctx.log(priority, tag, msg);
-    }
-
-    private void log(int priority, String tag, String msg, Throwable t) {
-        ctx.log(priority, tag, msg, t);
     }
 }

@@ -20,12 +20,10 @@
 package dev.koyufox.fuckpinning.utils;
 
 import android.os.RemoteException;
-import android.util.Log;
 
 import java.lang.reflect.Method;
 
 public final class ActivityTaskManagerUtils {
-    private static final String TAG = "FuckPinning";
 
     private ActivityTaskManagerUtils() {
     }
@@ -36,7 +34,7 @@ public final class ActivityTaskManagerUtils {
             Method getService = atmClass.getDeclaredMethod("getService");
             return getService.invoke(null);
         } catch (Throwable t) {
-            Log.w(TAG, "ActivityTaskManager.getService unavailable: " + t);
+            ModuleLog.w("ActivityTaskManager.getService unavailable: " + t);
             return null;
         }
     }

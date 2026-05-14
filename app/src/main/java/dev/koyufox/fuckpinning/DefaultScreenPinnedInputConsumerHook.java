@@ -19,13 +19,12 @@
 
 package dev.koyufox.fuckpinning;
 
-import android.util.Log;
-
 import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
+import dev.koyufox.fuckpinning.utils.ModuleLog;
 import io.github.libxposed.api.XposedInterface;
 import org.luckypray.dexkit.DexKitBridge;
 import org.luckypray.dexkit.query.FindMethod;
@@ -33,7 +32,6 @@ import org.luckypray.dexkit.query.matchers.MethodMatcher;
 import org.luckypray.dexkit.result.MethodData;
 
 public final class DefaultScreenPinnedInputConsumerHook {
-    private static final String TAG = "FuckPinning";
     private static final String SCREEN_PINNED_CONSUMER_CLASS = "com.android.quickstep.inputconsumers.ScreenPinnedInputConsumer";
     private static final String QUICKSTEP_PACKAGE = "com.android.quickstep";
     private static final String CONTEXT_CLASS = "android.content.Context";
@@ -55,17 +53,17 @@ public final class DefaultScreenPinnedInputConsumerHook {
 
     private void install() {
         if (!ensureDexKitLoaded()) {
-            log(Log.WARN, TAG, "DexKit unavailable, skip install");
+            ModuleLog.w("DexKit unavailable, skip install");
             return;
         }
 
         boolean installed = installScreenPinnedConsumerHookWithDexKit();
         if (installed) {
-            log(Log.INFO, TAG, "DexKit ScreenPinnedInputConsumer hook active");
+            ModuleLog.i("DexKit ScreenPinnedInputConsumer hook active");
             return;
         }
 
-        log(Log.WARN, TAG, "DexKit hook not matched");
+        ModuleLog.w("DexKit hook not matched");
     }
 
     private static synchronized boolean ensureDexKitLoaded() {
@@ -122,20 +120,20 @@ public final class DefaultScreenPinnedInputConsumerHook {
                     handleBlock(chain);
                     return null;
                 });
-                log(Log.INFO, TAG, "hooked primary method candidate: " + formatMethod(method));
+                ModuleLog.i("hooked primary method candidate: " + formatMethod(method));
             }
 
-            log(Log.INFO, TAG, "DexKit candidates scanned: " + candidateCount);
+            ModuleLog.i("DexKit candidates scanned: " + candidateCount);
 
             if (!hookedMethodSigns.isEmpty()) {
-                log(Log.INFO, TAG, "DexKit hook candidates matched: " + hookedMethodSigns.size());
+                ModuleLog.i("DexKit hook candidates matched: " + hookedMethodSigns.size());
                 return true;
             }
 
-            log(Log.WARN, TAG, "DexKit no method candidate matched in " + SCREEN_PINNED_CONSUMER_CLASS);
+            ModuleLog.w("DexKit no method candidate matched in " + SCREEN_PINNED_CONSUMER_CLASS);
             return false;
         } catch (Throwable t) {
-            log(Log.ERROR, TAG, "DexKit hook install failed", t);
+            ModuleLog.e("DexKit hook install failed", t);
             return false;
         }
     }
@@ -144,19 +142,19 @@ public final class DefaultScreenPinnedInputConsumerHook {
         try {
             return methodData.getMethodInstance(classLoader);
         } catch (Throwable t) {
-            log(Log.ERROR, TAG, "failed to resolve DexKit method instance", t);
+            ModuleLog.e("failed to resolve DexKit method instance", t);
             return null;
         }
     }
 
-    private void handleBlock(XposedInterface.Chain chain) throws Throwable {
+    private static void handleBlock(XposedInterface.Chain chain) throws Throwable {
         try {
             if (!isScreenPinnedConsumer(chain.getThisObject())) {
                 chain.proceed();
                 return;
             }
         } catch (Throwable t) {
-            log(Log.ERROR, TAG, "primary method hook failed, keep stock behavior", t);
+            ModuleLog.e("primary method hook failed, keep stock behavior", t);
             chain.proceed();
         }
     }
@@ -194,13 +192,5 @@ public final class DefaultScreenPinnedInputConsumerHook {
 
         String lower = className.toLowerCase(Locale.ROOT);
         return lower.contains("screen") && lower.contains("pinned") && lower.contains("consumer");
-    }
-
-    private void log(int priority, String tag, String msg) {
-        ctx.log(priority, tag, msg);
-    }
-
-    private void log(int priority, String tag, String msg, Throwable t) {
-        ctx.log(priority, tag, msg, t);
     }
 }
