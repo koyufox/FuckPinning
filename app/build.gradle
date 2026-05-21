@@ -31,7 +31,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = gitCommitCount.get()
-        versionName = '1.0.0'
+        versionName = '1.0.1'
         versionNameSuffix = gitCommitHash.map { "-${it}" }.get()
         proguardFiles
 
