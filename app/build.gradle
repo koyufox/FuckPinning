@@ -23,16 +23,16 @@ def signingKeyPassword = localProperties.getProperty('signing.keyPassword')
 def hasLocalSigningConfig = [signingStoreFile, signingStorePassword, signingKeyAlias, signingKeyPassword].every { it }
 
 android {
-    namespace "dev.koyufox.fuckpinning"
-    compileSdk 35
+    namespace = "dev.koyufox.fuckpinning"
+    compileSdk = 35
 
     defaultConfig {
-        applicationId "dev.koyufox.fuckpinning"
-        minSdk 26
-        targetSdk 35
-        versionCode gitCommitCount.get()
-        versionName '1.0.0'
-        versionNameSuffix gitCommitHash.map { "-${it}" }.get()
+        applicationId = "dev.koyufox.fuckpinning"
+        minSdk = 26
+        targetSdk = 35
+        versionCode = gitCommitCount.get()
+        versionName = '1.0.0'
+        versionNameSuffix = gitCommitHash.map { "-${it}" }.get()
         proguardFiles
 
         ndk {
@@ -43,34 +43,34 @@ android {
     signingConfigs {
         if (hasLocalSigningConfig) {
             local {
-                storeFile rootProject.file(signingStoreFile)
-                storePassword signingStorePassword
-                keyAlias signingKeyAlias
-                keyPassword signingKeyPassword
+                storeFile = rootProject.file(signingStoreFile)
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
             }
         }
     }
 
     buildTypes {
         release {
-            minifyEnabled true
+            minifyEnabled = true
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
-            multiDexEnabled true
+            multiDexEnabled = true
             if (hasLocalSigningConfig) {
-                signingConfig signingConfigs.local
+                signingConfig = signingConfigs.local
             }
         }
         debug {
-            minifyEnabled false
+            minifyEnabled = false
             if (hasLocalSigningConfig) {
-                signingConfig signingConfigs.local
+                signingConfig = signingConfigs.local
             }
         }
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     packaging {
